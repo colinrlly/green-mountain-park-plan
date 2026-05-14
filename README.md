@@ -48,22 +48,17 @@ them with real digitized geometry before the map is meaningful.
 
 ### Where to get the existing trails (easy)
 
-1. **OpenStreetMap** has Hayden Park trails mapped. Pull them with the Overpass
-   API — example query that grabs every `highway=path|footway` inside the park
-   bbox:
-   ```
-   [out:json][timeout:25];
-   (
-     way["highway"~"path|footway|track"](39.690, -105.180, 39.715, -105.135);
-   );
-   out geom;
-   ```
-   Run it at <https://overpass-turbo.eu/>, then "Export → GeoJSON".
+Run the bundled fetcher — it queries OpenStreetMap via the Overpass API and
+merges the result into `data/trails.geojson` as `status: "existing"`
+features. Any hand-maintained `new` / `removed` features in the file are
+preserved.
 
-2. **Lakewood / Jefferson County GIS Open Data** likely also publishes the
-   trails as a shapefile or GeoJSON download.
+```bash
+python3 scripts/fetch_osm_trails.py
+```
 
-Tag each feature with `"status": "existing"` and a `"name"`.
+(Lakewood / Jefferson County GIS Open Data may also publish trails as a
+shapefile; that would be an alternative authoritative source.)
 
 ### Where to get the proposed new trails and parking (manual)
 
