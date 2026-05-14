@@ -133,7 +133,7 @@ class handler(BaseHTTPRequestHandler):
                 },
                 "features": features,
             }
-            cache_header = "public, s-maxage=86400, stale-while-revalidate=604800"
+            cache_header = "public, s-maxage=300, stale-while-revalidate=86400"
         else:
             fallback = load_static_geojson()
             if fallback is None:
