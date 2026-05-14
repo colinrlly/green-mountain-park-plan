@@ -48,30 +48,16 @@ them with real digitized geometry before the map is meaningful.
 
 ### Where the existing trails come from
 
-The deployed site has a Vercel serverless function at **`GET /api/trails`**
-(source: `api/trails.py`) that queries OpenStreetMap via the Overpass API,
-returns existing trails as `status: "existing"` GeoJSON features, and merges
-in any hand-maintained `new` / `removed` features from `data/trails.geojson`.
-Vercel caches the response at the edge for 24h with a 7-day stale-while-
-revalidate window, so Overpass is hit at most once per region per day.
+A snapshot of the OSM trail network for the park is baked into
+`data/trails.geojson` with `status: "existing"`. To refresh it from
+OpenStreetMap (e.g. if someone has added or fixed trails upstream), run:
 
-The frontend tries `/api/trails` first and falls back to the static
-`data/trails.geojson` file if the function isn't reachable — which is what
-lets `python3 -m http.server` still show *something* locally.
-
-For local dev with the API working, install Vercel CLI and run:
-```bash
-npm i -g vercel
-vercel dev
-```
-
-If you want a snapshot of the OSM trails committed to git (e.g. to be sure
-the map works without hitting Overpass), there's also a one-shot script:
 ```bash
 python3 scripts/fetch_osm_trails.py
 ```
-It writes the same features straight into `data/trails.geojson`, preserving
-non-existing features.
+
+The script preserves any hand-maintained `new` / `removed` features in the
+file and only rewrites the existing-trail features. Commit the result.
 
 (Lakewood / Jefferson County GIS Open Data may also publish trails as a
 shapefile; that would be an alternative authoritative source.)
