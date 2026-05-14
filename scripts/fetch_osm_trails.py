@@ -20,16 +20,23 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-# Park bbox (south, west, north, east) — generous, covers all of Hayden Park.
-BBOX = (39.685, -105.185, 39.720, -105.135)
 OUTPUT = Path(__file__).resolve().parent.parent / "data" / "trails.geojson"
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-QUERY = f"""
+
+# Filter by the park's OSM polygon rather than a bbox so we don't pick up
+# suburban sidewalks and bike lanes. See api/trails.py for the same query.
+QUERY = """
 [out:json][timeout:60];
 (
-  way["highway"~"path|footway|track|bridleway|cycleway"]
-    ({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});
+  area["leisure"~"park|nature_reserve"]["name"~"Hayden|Green Mountain",i];
+  area["boundary"="protected_area"]["name"~"Hayden|Green Mountain",i];
+)->.park;
+(
+  way["highway"~"path|footway|track|bridleway"]
+    ["footway"!~"sidewalk|crossing"]
+    ["service"!~"driveway|parking_aisle"]
+    (area.park);
 );
 out geom tags;
 """.strip()
@@ -74,7 +81,7 @@ def load_existing() -> dict:
 
 
 def main() -> int:
-    print(f"Querying Overpass for trails in bbox {BBOX} …", file=sys.stderr)
+    print("Querying Overpass for trails inside the Hayden Park area …", file=sys.stderr)
     data = fetch_overpass()
     ways = data.get("elements", [])
     print(f"  got {len(ways)} ways", file=sys.stderr)

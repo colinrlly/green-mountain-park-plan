@@ -18,13 +18,23 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-BBOX = (39.685, -105.185, 39.720, -105.135)  # south, west, north, east
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-QUERY = f"""
+
+# Query: find any OSM area named "Hayden" or "Green Mountain" tagged as a park
+# or nature reserve, then return only trail-like ways inside that area. This
+# avoids picking up suburban sidewalks and bike lanes that a plain bbox
+# query would include.
+QUERY = """
 [out:json][timeout:55];
 (
-  way["highway"~"path|footway|track|bridleway|cycleway"]
-    ({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});
+  area["leisure"~"park|nature_reserve"]["name"~"Hayden|Green Mountain",i];
+  area["boundary"="protected_area"]["name"~"Hayden|Green Mountain",i];
+)->.park;
+(
+  way["highway"~"path|footway|track|bridleway"]
+    ["footway"!~"sidewalk|crossing"]
+    ["service"!~"driveway|parking_aisle"]
+    (area.park);
 );
 out geom tags;
 """.strip()
