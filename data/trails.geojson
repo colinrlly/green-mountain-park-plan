@@ -1,0 +1,45 @@
+{
+  "type": "FeatureCollection",
+  "_note": "PLACEHOLDER FEATURES. Replace with real digitized trails. Each feature must have properties.status of 'existing', 'new', or 'removed' and a properties.name. See README for digitizing workflow.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "PLACEHOLDER existing trail (summit ridge)", "status": "existing" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-105.1605, 39.7065],
+          [-105.1570, 39.7062],
+          [-105.1542, 39.7058],
+          [-105.1510, 39.7055],
+          [-105.1480, 39.7050]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "PLACEHOLDER proposed new trail", "status": "new" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-105.1542, 39.7058],
+          [-105.1530, 39.7040],
+          [-105.1515, 39.7020],
+          [-105.1495, 39.7000]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "PLACEHOLDER trail to be removed", "status": "removed" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-105.1542, 39.7058],
+          [-105.1560, 39.7045],
+          [-105.1575, 39.7030]
+        ]
+      }
+    }
+  ]
+}

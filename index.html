@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Green Mountain Park Plan — 3D Terrain</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #map { position: absolute; inset: 0; }
+
+    #panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(20, 22, 28, 0.88);
+      color: #f5f5f5;
+      padding: 14px 16px;
+      border-radius: 8px;
+      max-width: 280px;
+      font-size: 13px;
+      line-height: 1.4;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      z-index: 1;
+    }
+    #panel h1 { margin: 0 0 4px 0; font-size: 15px; }
+    #panel .subtitle { opacity: 0.7; font-size: 11px; margin-bottom: 12px; }
+    #panel label { display: block; margin: 4px 0; cursor: pointer; user-select: none; }
+    #panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
+    #panel .swatch {
+      display: inline-block;
+      width: 18px;
+      height: 4px;
+      vertical-align: middle;
+      margin-right: 6px;
+      border-radius: 2px;
+    }
+    #panel .swatch.box { height: 10px; width: 10px; border-radius: 2px; }
+    #panel hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0; }
+    #panel .tour-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    #panel button {
+      background: rgba(255,255,255,0.08);
+      color: #f5f5f5;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    #panel button:hover { background: rgba(255,255,255,0.18); }
+    #panel .exag-row { display: flex; align-items: center; gap: 8px; }
+    #panel .exag-row input { flex: 1; }
+    #attribution {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background: rgba(255,255,255,0.7);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      z-index: 1;
+    }
+    #attribution a { color: #0066cc; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div id="panel">
+    <h1>William F. Hayden Park</h1>
+    <div class="subtitle">Green Mountain Enhancement Plan — citizen 3D viewer</div>
+
+    <strong>Trails</strong>
+    <label><input type="checkbox" data-layer="trails-existing" checked><span class="swatch" style="background:#2ecc71"></span>Existing</label>
+    <label><input type="checkbox" data-layer="trails-new" checked><span class="swatch" style="background:#f39c12;background-image:repeating-linear-gradient(90deg,#f39c12 0 4px,transparent 4px 7px)"></span>Proposed new</label>
+    <label><input type="checkbox" data-layer="trails-removed" checked><span class="swatch" style="background:#e74c3c"></span>To be removed</label>
+
+    <hr>
+    <strong>Parking</strong>
+    <label><input type="checkbox" data-layer="parking-existing" checked><span class="swatch box" style="background:#3498db"></span>Existing</label>
+    <label><input type="checkbox" data-layer="parking-expanded" checked><span class="swatch box" style="background:#9b59b6"></span>Expanded</label>
+    <label><input type="checkbox" data-layer="parking-new" checked><span class="swatch box" style="background:#e67e22"></span>New</label>
+
+    <hr>
+    <strong>Terrain</strong>
+    <div class="exag-row">
+      <span>Exag:</span>
+      <input type="range" id="exag" min="1" max="3" step="0.1" value="1.4">
+      <span id="exag-val">1.4×</span>
+    </div>
+
+    <hr>
+    <strong>Fly to</strong>
+    <div class="tour-buttons">
+      <button data-tour="overview">Overview</button>
+      <button data-tour="summit">Summit</button>
+      <button data-tour="rooney">Rooney TH</button>
+      <button data-tour="florida">Florida TH</button>
+      <button data-tour="utah">Utah TH</button>
+    </div>
+  </div>
+
+  <div id="attribution">
+    Imagery: <a href="https://www.esri.com/" target="_blank">Esri World Imagery</a> ·
+    Terrain: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a> ·
+    Plan: <a href="https://www.lakewoodtogether.org/williamfhaydenpark" target="_blank">Lakewood</a>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+    const TOURS = {
+      overview: { center: [-105.1542, 39.7058], zoom: 13.2, pitch: 55, bearing: -20 },
+      summit:   { center: [-105.1542, 39.7058], zoom: 14.8, pitch: 70, bearing: 30 },
+      rooney:   { center: [-105.1755, 39.7090], zoom: 15.2, pitch: 65, bearing: 90 },
+      florida:  { center: [-105.1395, 39.7010], zoom: 15.2, pitch: 65, bearing: -90 },
+      utah:     { center: [-105.1480, 39.6940], zoom: 15.2, pitch: 65, bearing: 0 },
+    };
+
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: {
+        version: 8,
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+        sources: {
+          satellite: {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            maxzoom: 19,
+            attribution: 'Esri, Maxar, Earthstar Geographics'
+          },
+          terrain: {
+            type: 'raster-dem',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            maxzoom: 15,
+            encoding: 'terrarium',
+            attribution: 'AWS Terrain Tiles'
+          },
+          trails: { type: 'geojson', data: 'data/trails.geojson' },
+          parking: { type: 'geojson', data: 'data/parking.geojson' }
+        },
+        layers: [
+          { id: 'satellite', type: 'raster', source: 'satellite' },
+          {
+            id: 'hillshade',
+            type: 'hillshade',
+            source: 'terrain',
+            paint: {
+              'hillshade-exaggeration': 0.35,
+              'hillshade-shadow-color': '#000',
+              'hillshade-highlight-color': '#fff'
+            }
+          },
+          {
+            id: 'parking-existing',
+            type: 'fill',
+            source: 'parking',
+            filter: ['==', ['get', 'status'], 'existing'],
+            paint: { 'fill-color': '#3498db', 'fill-opacity': 0.55, 'fill-outline-color': '#1f6fa3' }
+          },
+          {
+            id: 'parking-expanded',
+            type: 'fill',
+            source: 'parking',
+            filter: ['==', ['get', 'status'], 'expanded'],
+            paint: { 'fill-color': '#9b59b6', 'fill-opacity': 0.55, 'fill-outline-color': '#5e3273' }
+          },
+          {
+            id: 'parking-new',
+            type: 'fill',
+            source: 'parking',
+            filter: ['==', ['get', 'status'], 'new'],
+            paint: { 'fill-color': '#e67e22', 'fill-opacity': 0.55, 'fill-outline-color': '#92500f' }
+          },
+          {
+            id: 'trails-existing',
+            type: 'line',
+            source: 'trails',
+            filter: ['==', ['get', 'status'], 'existing'],
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#2ecc71', 'line-width': 3 }
+          },
+          {
+            id: 'trails-new',
+            type: 'line',
+            source: 'trails',
+            filter: ['==', ['get', 'status'], 'new'],
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#f39c12', 'line-width': 3, 'line-dasharray': [2, 1.5] }
+          },
+          {
+            id: 'trails-removed',
+            type: 'line',
+            source: 'trails',
+            filter: ['==', ['get', 'status'], 'removed'],
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#e74c3c', 'line-width': 2.5, 'line-dasharray': [1, 1] }
+          }
+        ],
+        terrain: { source: 'terrain', exaggeration: 1.4 },
+        sky: {}
+      },
+      ...TOURS.overview,
+      maxPitch: 85,
+      hash: true
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'imperial' }), 'bottom-left');
+
+    map.on('load', () => {
+      map.on('click', ['trails-existing', 'trails-new', 'trails-removed'], (e) => {
+        const f = e.features[0];
+        const name = f.properties.name || 'Trail';
+        const status = f.properties.status;
+        new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`<strong>${name}</strong><br><span style="opacity:0.7">${status}</span>`)
+          .addTo(map);
+      });
+      map.on('click', ['parking-existing', 'parking-expanded', 'parking-new'], (e) => {
+        const f = e.features[0];
+        const name = f.properties.name || 'Parking';
+        const status = f.properties.status;
+        new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`<strong>${name}</strong><br><span style="opacity:0.7">${status}</span>`)
+          .addTo(map);
+      });
+    });
+
+    document.querySelectorAll('#panel input[data-layer]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.dataset.layer;
+        map.setLayoutProperty(id, 'visibility', cb.checked ? 'visible' : 'none');
+      });
+    });
+
+    document.querySelectorAll('#panel button[data-tour]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = TOURS[btn.dataset.tour];
+        map.flyTo({ ...t, duration: 2500, essential: true });
+      });
+    });
+
+    const exag = document.getElementById('exag');
+    const exagVal = document.getElementById('exag-val');
+    exag.addEventListener('input', () => {
+      const v = parseFloat(exag.value);
+      exagVal.textContent = v.toFixed(1) + '×';
+      map.setTerrain({ source: 'terrain', exaggeration: v });
+    });
+  </script>
+</body>
+</html>
