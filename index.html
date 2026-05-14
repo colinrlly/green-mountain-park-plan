@@ -139,7 +139,7 @@
             encoding: 'terrarium',
             attribution: 'AWS Terrain Tiles'
           },
-          trails: { type: 'geojson', data: 'data/trails.geojson' },
+          trails: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
           parking: { type: 'geojson', data: 'data/parking.geojson' }
         },
         layers: [
@@ -211,7 +211,25 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'imperial' }), 'bottom-left');
 
+    async function loadTrails() {
+      for (const url of ['/api/trails', 'data/trails.geojson']) {
+        try {
+          const r = await fetch(url);
+          if (!r.ok) continue;
+          const gj = await r.json();
+          map.getSource('trails').setData(gj);
+          console.log(`trails loaded from ${url}`, gj._count ?? `${gj.features?.length} features`);
+          return;
+        } catch (e) {
+          console.warn(`trails fetch failed for ${url}`, e);
+        }
+      }
+      console.error('all trail sources failed');
+    }
+
     map.on('load', () => {
+      loadTrails();
+
       map.on('click', ['trails-existing', 'trails-new', 'trails-removed'], (e) => {
         const f = e.features[0];
         const name = f.properties.name || 'Trail';
