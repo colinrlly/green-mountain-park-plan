@@ -22,21 +22,25 @@ from pathlib import Path
 
 OUTPUT = Path(__file__).resolve().parent.parent / "data" / "trails.geojson"
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Public Overpass mirrors, tried in order if one fails or rate-limits.
+OVERPASS_MIRRORS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
 
-# Filter by the park's OSM polygon rather than a bbox so we don't pick up
-# suburban sidewalks and bike lanes. See api/trails.py for the same query.
-QUERY = """
+# Tight bbox around the park (S, W, N, E) plus tag exclusions, instead of
+# an area-polygon filter — area lookups are too slow for the API endpoint
+# and Overpass sometimes 406s the area syntax.
+BBOX = (39.695, -105.180, 39.717, -105.140)
+QUERY = f"""
 [out:json][timeout:60];
-(
-  area["leisure"~"park|nature_reserve"]["name"~"Hayden|Green Mountain",i];
-  area["boundary"="protected_area"]["name"~"Hayden|Green Mountain",i];
-)->.park;
 (
   way["highway"~"path|footway|track|bridleway"]
     ["footway"!~"sidewalk|crossing"]
     ["service"!~"driveway|parking_aisle"]
-    (area.park);
+    ({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});
 );
 out geom tags;
 """.strip()
@@ -44,9 +48,23 @@ out geom tags;
 
 def fetch_overpass() -> dict:
     body = urllib.parse.urlencode({"data": QUERY}).encode()
-    req = urllib.request.Request(OVERPASS_URL, data=body)
-    with urllib.request.urlopen(req, timeout=90) as resp:
-        return json.load(resp)
+    last_err: Exception | None = None
+    for url in OVERPASS_MIRRORS:
+        try:
+            print(f"  trying {url} …", file=sys.stderr)
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={
+                    "User-Agent": "green-mountain-park-plan/0.1 (citizen-science viewer)",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                return json.load(resp)
+        except Exception as exc:
+            print(f"    failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            last_err = exc
+    raise RuntimeError(f"all Overpass mirrors failed; last error: {last_err}")
 
 
 def way_to_feature(way: dict) -> dict | None:
