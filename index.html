@@ -18,6 +18,8 @@
       padding: 14px 16px;
       border-radius: 8px;
       max-width: 280px;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
       font-size: 13px;
       line-height: 1.4;
       backdrop-filter: blur(6px);
@@ -51,7 +53,21 @@
     }
     #panel button:hover { background: rgba(255,255,255,0.18); }
     #panel .exag-row { display: flex; align-items: center; gap: 8px; }
-    #panel .exag-row input { flex: 1; }
+    #panel .exag-row input[type="range"] { flex: 1; }
+    #panel select, #panel input[type="file"], #panel input[type="text"] {
+      background: rgba(255,255,255,0.08);
+      color: #f5f5f5;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      padding: 3px 6px;
+      font-size: 11px;
+      font-family: inherit;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 4px 0;
+    }
+    #panel .draw-hint { font-size: 10px; opacity: 0.7; display: block; margin-top: 4px; min-height: 12px; }
+    #panel button.active { background: #2ecc71; color: #111; border-color: #2ecc71; }
     #attribution {
       position: absolute;
       bottom: 4px;
@@ -99,6 +115,39 @@
       <button data-tour="rooney">Rooney TH</button>
       <button data-tour="florida">Florida TH</button>
       <button data-tour="utah">Utah TH</button>
+    </div>
+
+    <hr>
+    <strong>Draw</strong>
+    <select id="draw-status">
+      <option value="new">Status: new (proposed)</option>
+      <option value="removed">Status: removed</option>
+      <option value="expanded">Status: expanded</option>
+    </select>
+    <div class="tour-buttons">
+      <button data-draw="line">Trail</button>
+      <button data-draw="polygon">Parking</button>
+      <button id="draw-finish">Finish</button>
+      <button data-draw="off">Cancel</button>
+    </div>
+    <div class="tour-buttons">
+      <button id="draw-copy">Copy GeoJSON</button>
+      <button id="draw-clear">Clear all</button>
+    </div>
+    <span class="draw-hint" id="draw-hint"></span>
+
+    <hr>
+    <strong>PDF / image overlay</strong>
+    <input type="file" id="overlay-file" accept="image/*">
+    <label><input type="checkbox" id="overlay-toggle"> Show overlay</label>
+    <label><input type="checkbox" id="overlay-adjust"> Drag corners to align</label>
+    <div class="exag-row">
+      <span>Opacity:</span>
+      <input type="range" id="overlay-opacity" min="0" max="1" step="0.05" value="0.6">
+      <span id="overlay-opacity-val">0.6</span>
+    </div>
+    <div class="tour-buttons">
+      <button id="overlay-reset">Reset corners</button>
     </div>
   </div>
 
@@ -171,7 +220,9 @@
             attribution: 'AWS Terrain Tiles'
           },
           trails: { type: 'geojson', data: 'data/trails.geojson' },
-          parking: { type: 'geojson', data: 'data/parking.geojson' }
+          parking: { type: 'geojson', data: 'data/parking.geojson' },
+          drafts: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+          drawing: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
         },
         layers: [
           { id: 'satellite', type: 'raster', source: 'satellite' },
@@ -187,6 +238,55 @@
           },
           ...PARKING_LAYERS,
           ...TRAIL_LAYERS,
+          {
+            id: 'drafts-fill',
+            type: 'fill',
+            source: 'drafts',
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            paint: { 'fill-color': '#e91e63', 'fill-opacity': 0.3 }
+          },
+          {
+            id: 'drafts-line',
+            type: 'line',
+            source: 'drafts',
+            filter: ['==', ['geometry-type'], 'LineString'],
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#e91e63', 'line-width': 3, 'line-dasharray': [3, 2] }
+          },
+          {
+            id: 'drafts-outline',
+            type: 'line',
+            source: 'drafts',
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            paint: { 'line-color': '#e91e63', 'line-width': 2, 'line-dasharray': [3, 2] }
+          },
+          {
+            id: 'drawing-fill',
+            type: 'fill',
+            source: 'drawing',
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            paint: { 'fill-color': '#fff', 'fill-opacity': 0.15 }
+          },
+          {
+            id: 'drawing-line',
+            type: 'line',
+            source: 'drawing',
+            filter: ['!=', ['geometry-type'], 'Point'],
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#fff', 'line-width': 2, 'line-dasharray': [1, 1] }
+          },
+          {
+            id: 'drawing-vertex',
+            type: 'circle',
+            source: 'drawing',
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: {
+              'circle-color': '#fff',
+              'circle-radius': 4,
+              'circle-stroke-color': '#000',
+              'circle-stroke-width': 1
+            }
+          },
         ],
         terrain: { source: 'terrain', exaggeration: INIT_EXAG },
         sky: {}
@@ -202,6 +302,7 @@
     let popup;
     function bindPopup(layerIds, fallbackName) {
       map.on('click', layerIds, (e) => {
+        if (drawMode !== 'off') return;
         const f = e.features[0];
         popup?.remove();
         popup = new maplibregl.Popup()
@@ -237,6 +338,225 @@
       const v = parseFloat(exag.value);
       exagVal.textContent = v.toFixed(1) + '×';
       map.setTerrain({ source: 'terrain', exaggeration: v });
+    });
+
+    // -------- Drawing --------
+    const DRAFTS_KEY = 'gmpp:drafts:v1';
+    const drawHint = document.getElementById('draw-hint');
+    const drawStatusSel = document.getElementById('draw-status');
+
+    function loadDrafts() {
+      try {
+        const raw = localStorage.getItem(DRAFTS_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+      return { type: 'FeatureCollection', features: [] };
+    }
+    function persistDrafts() {
+      localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+      map.getSource('drafts')?.setData(drafts);
+    }
+
+    let drafts = loadDrafts();
+    let drawMode = 'off';
+    let drawVertices = [];
+
+    function refreshDrawingPreview() {
+      const features = drawVertices.map(v => ({
+        type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: v }
+      }));
+      if (drawMode === 'line' && drawVertices.length >= 2) {
+        features.push({
+          type: 'Feature', properties: {},
+          geometry: { type: 'LineString', coordinates: drawVertices }
+        });
+      } else if (drawMode === 'polygon' && drawVertices.length >= 2) {
+        const ring = drawVertices.length >= 3
+          ? [...drawVertices, drawVertices[0]]
+          : drawVertices;
+        features.push({
+          type: 'Feature', properties: {},
+          geometry: drawVertices.length >= 3
+            ? { type: 'Polygon', coordinates: [ring] }
+            : { type: 'LineString', coordinates: ring }
+        });
+      }
+      map.getSource('drawing')?.setData({ type: 'FeatureCollection', features });
+    }
+
+    function setDrawMode(mode) {
+      drawMode = mode;
+      drawVertices = [];
+      refreshDrawingPreview();
+      map.getCanvas().style.cursor = mode === 'off' ? '' : 'crosshair';
+      document.querySelectorAll('[data-draw]').forEach(b => {
+        b.classList.toggle('active', b.dataset.draw === mode && mode !== 'off');
+      });
+      drawHint.textContent =
+        mode === 'line' ? 'Click to add points · Finish to save · Esc to cancel' :
+        mode === 'polygon' ? 'Click to add corners · Finish to close · Esc to cancel' :
+        '';
+    }
+
+    function finishDraw() {
+      const minVerts = drawMode === 'polygon' ? 3 : 2;
+      if (drawMode === 'off' || drawVertices.length < minVerts) return;
+      const name = prompt('Name for this feature?', '') || 'Untitled';
+      const status = drawStatusSel.value;
+      const kind = drawMode === 'line' ? 'trail' : 'parking';
+      const geometry = drawMode === 'line'
+        ? { type: 'LineString', coordinates: drawVertices }
+        : { type: 'Polygon', coordinates: [[...drawVertices, drawVertices[0]]] };
+      drafts.features.push({
+        type: 'Feature',
+        properties: { name, status, kind, draft: true, createdAt: new Date().toISOString() },
+        geometry
+      });
+      persistDrafts();
+      drawVertices = [];
+      refreshDrawingPreview();
+    }
+
+    map.on('click', (e) => {
+      if (drawMode === 'off') return;
+      drawVertices.push([e.lngLat.lng, e.lngLat.lat]);
+      refreshDrawingPreview();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (drawMode === 'off') return;
+      if (e.key === 'Escape') {
+        drawVertices = [];
+        refreshDrawingPreview();
+      } else if (e.key === 'Enter') {
+        finishDraw();
+      } else if ((e.key === 'Backspace' || e.key === 'z' && (e.ctrlKey || e.metaKey)) && drawVertices.length) {
+        drawVertices.pop();
+        refreshDrawingPreview();
+      }
+    });
+
+    document.querySelectorAll('[data-draw]').forEach(btn => {
+      btn.addEventListener('click', () => setDrawMode(btn.dataset.draw));
+    });
+    document.getElementById('draw-finish').addEventListener('click', finishDraw);
+
+    document.getElementById('draw-copy').addEventListener('click', async () => {
+      const text = JSON.stringify(drafts, null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        flashButton('draw-copy', `Copied ${drafts.features.length} feature(s)`);
+      } catch {
+        prompt('Copy this GeoJSON:', text);
+      }
+    });
+
+    document.getElementById('draw-clear').addEventListener('click', () => {
+      if (!drafts.features.length) return;
+      if (!confirm(`Delete all ${drafts.features.length} draft feature(s)?`)) return;
+      drafts = { type: 'FeatureCollection', features: [] };
+      persistDrafts();
+    });
+
+    function flashButton(id, msg) {
+      const b = document.getElementById(id);
+      const old = b.textContent;
+      b.textContent = msg;
+      setTimeout(() => b.textContent = old, 1600);
+    }
+
+    map.on('load', () => persistDrafts());
+
+    // -------- PDF / image overlay --------
+    const OVERLAY_KEY = 'gmpp:overlay:v1';
+    const PARK_CORNERS = [
+      [-105.180, 39.717], // top-left
+      [-105.140, 39.717], // top-right
+      [-105.140, 39.695], // bottom-right
+      [-105.180, 39.695], // bottom-left
+    ];
+    const TRANSPARENT_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=';
+
+    let overlayCorners = PARK_CORNERS.map(c => [...c]);
+    let overlayUrl = TRANSPARENT_PNG;
+    try {
+      const saved = JSON.parse(localStorage.getItem(OVERLAY_KEY) || '{}');
+      if (Array.isArray(saved.corners) && saved.corners.length === 4) {
+        overlayCorners = saved.corners;
+      }
+    } catch {}
+
+    function persistOverlay() {
+      localStorage.setItem(OVERLAY_KEY, JSON.stringify({ corners: overlayCorners }));
+    }
+
+    let cornerMarkers = [];
+    function removeCornerMarkers() {
+      cornerMarkers.forEach(m => m.remove());
+      cornerMarkers = [];
+    }
+    function addCornerMarkers() {
+      removeCornerMarkers();
+      cornerMarkers = overlayCorners.map((coord, i) => {
+        const m = new maplibregl.Marker({ draggable: true, color: '#e91e63' })
+          .setLngLat(coord).addTo(map);
+        m.on('drag', () => {
+          const ll = m.getLngLat();
+          overlayCorners[i] = [ll.lng, ll.lat];
+          map.getSource('overlay')?.setCoordinates(overlayCorners);
+        });
+        m.on('dragend', persistOverlay);
+        return m;
+      });
+    }
+
+    map.on('load', () => {
+      map.addSource('overlay', {
+        type: 'image',
+        url: overlayUrl,
+        coordinates: overlayCorners
+      });
+      map.addLayer({
+        id: 'overlay',
+        type: 'raster',
+        source: 'overlay',
+        layout: { 'visibility': 'none' },
+        paint: { 'raster-opacity': 0.6 }
+      }, 'parking-existing');
+    });
+
+    document.getElementById('overlay-file').addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (overlayUrl.startsWith('blob:')) URL.revokeObjectURL(overlayUrl);
+      overlayUrl = URL.createObjectURL(file);
+      map.getSource('overlay').updateImage({ url: overlayUrl, coordinates: overlayCorners });
+      document.getElementById('overlay-toggle').checked = true;
+      map.setLayoutProperty('overlay', 'visibility', 'visible');
+    });
+
+    document.getElementById('overlay-toggle').addEventListener('change', (e) => {
+      map.setLayoutProperty('overlay', 'visibility', e.target.checked ? 'visible' : 'none');
+    });
+
+    document.getElementById('overlay-adjust').addEventListener('change', (e) => {
+      if (e.target.checked) addCornerMarkers();
+      else removeCornerMarkers();
+    });
+
+    const overlayOpacity = document.getElementById('overlay-opacity');
+    const overlayOpacityVal = document.getElementById('overlay-opacity-val');
+    overlayOpacity.addEventListener('input', () => {
+      const v = parseFloat(overlayOpacity.value);
+      overlayOpacityVal.textContent = v.toFixed(2);
+      map.setPaintProperty('overlay', 'raster-opacity', v);
+    });
+
+    document.getElementById('overlay-reset').addEventListener('click', () => {
+      overlayCorners = PARK_CORNERS.map(c => [...c]);
+      map.getSource('overlay')?.setCoordinates(overlayCorners);
+      persistOverlay();
+      if (cornerMarkers.length) addCornerMarkers();
     });
   </script>
 </body>

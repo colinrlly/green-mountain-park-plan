@@ -68,17 +68,33 @@ The City of Lakewood publishes the plan only as PDFs at
 <https://www.lakewoodtogether.org/williamfhaydenpark>. The relevant board is
 **"Open House 2 — Proposed Trails Aerial.pdf"**.
 
-Two ways to digitize it:
+The viewer has a built-in drawing tool that handles this:
 
-- **Quick**: open <https://geojson.io>, switch the basemap to satellite, and
-  trace the new trails and parking lots by eye against the same aerial. Save
-  out the resulting features and merge them into the right GeoJSON file with
-  the correct `status`.
+1. **Export the plan page as a PNG.** Open the PDF, screenshot or "save page
+   as image" the proposed-trails page.
+2. **Load it as an overlay.** In the viewer's "PDF / image overlay" panel,
+   pick the PNG with the file input, toggle "Show overlay", and adjust the
+   opacity slider so you can see both the overlay and the satellite imagery.
+3. **Align the corners.** Check "Drag corners to align", then drag the four
+   pink markers (clockwise from top-left) until the overlay's roads and
+   landmarks line up with the satellite imagery underneath. Uncheck the box
+   to lock the alignment. Corner positions are saved to localStorage.
+4. **Draw.** In the "Draw" panel, pick the intended status (`new` /
+   `removed` / `expanded`), click "Trail" or "Parking", then click points
+   on the map to trace. Press **Finish** (or Enter) to save the shape and
+   give it a name; press **Esc** or Backspace to undo the last vertex.
+   Drafts render as pink dashed lines/polygons and persist across reloads.
+5. **Hand them off.** Hit "Copy GeoJSON" to copy the entire drafts
+   `FeatureCollection` to your clipboard. Paste it into a message and
+   they'll get merged into `data/trails.geojson` / `data/parking.geojson`
+   with the right status, committed and deployed.
 
-- **Accurate**: open the PDF in QGIS, georeference it against the satellite
-  basemap (use 4–6 control points along Alameda Pkwy and the Rooney Rd
-  trailhead), then digitize trails as `LineString` and parking as `Polygon`
-  features into a new layer and export GeoJSON.
+Alternative low-tech paths if you don't want the in-app tool:
+
+- <https://geojson.io> with a satellite basemap, trace by eye, copy the
+  result.
+- QGIS with the PDF georeferenced via 4–6 control points (most accurate,
+  most setup).
 
 ### Optional upgrades
 
