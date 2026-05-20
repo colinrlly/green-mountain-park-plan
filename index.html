@@ -110,6 +110,10 @@
 
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script>
+    const INIT_EXAG = 1.4;
+    document.getElementById('exag').value = INIT_EXAG;
+    document.getElementById('exag-val').textContent = INIT_EXAG.toFixed(1) + '×';
+
     const TOURS = {
       overview: { center: [-105.1542, 39.7058], zoom: 13.2, pitch: 55, bearing: -20 },
       summit:   { center: [-105.1542, 39.7058], zoom: 14.8, pitch: 70, bearing: 30 },
@@ -117,6 +121,33 @@
       florida:  { center: [-105.1395, 39.7010], zoom: 15.2, pitch: 65, bearing: -90 },
       utah:     { center: [-105.1480, 39.6940], zoom: 15.2, pitch: 65, bearing: 0 },
     };
+
+    function statusLayer(id, source, type, status, paint) {
+      const layer = {
+        id, source, type,
+        filter: ['==', ['get', 'status'], status],
+        paint,
+      };
+      if (type === 'line') layer.layout = { 'line-join': 'round', 'line-cap': 'round' };
+      return layer;
+    }
+
+    const PARKING_LAYERS = [
+      statusLayer('parking-existing', 'parking', 'fill', 'existing',
+        { 'fill-color': '#3498db', 'fill-opacity': 0.55, 'fill-outline-color': '#1f6fa3' }),
+      statusLayer('parking-expanded', 'parking', 'fill', 'expanded',
+        { 'fill-color': '#9b59b6', 'fill-opacity': 0.55, 'fill-outline-color': '#5e3273' }),
+      statusLayer('parking-new', 'parking', 'fill', 'new',
+        { 'fill-color': '#e67e22', 'fill-opacity': 0.55, 'fill-outline-color': '#92500f' }),
+    ];
+    const TRAIL_LAYERS = [
+      statusLayer('trails-existing', 'trails', 'line', 'existing',
+        { 'line-color': '#2ecc71', 'line-width': 3 }),
+      statusLayer('trails-new', 'trails', 'line', 'new',
+        { 'line-color': '#f39c12', 'line-width': 3, 'line-dasharray': [2, 1.5] }),
+      statusLayer('trails-removed', 'trails', 'line', 'removed',
+        { 'line-color': '#e74c3c', 'line-width': 2.5, 'line-dasharray': [1, 1] }),
+    ];
 
     const map = new maplibregl.Map({
       container: 'map',
@@ -154,53 +185,10 @@
               'hillshade-highlight-color': '#fff'
             }
           },
-          {
-            id: 'parking-existing',
-            type: 'fill',
-            source: 'parking',
-            filter: ['==', ['get', 'status'], 'existing'],
-            paint: { 'fill-color': '#3498db', 'fill-opacity': 0.55, 'fill-outline-color': '#1f6fa3' }
-          },
-          {
-            id: 'parking-expanded',
-            type: 'fill',
-            source: 'parking',
-            filter: ['==', ['get', 'status'], 'expanded'],
-            paint: { 'fill-color': '#9b59b6', 'fill-opacity': 0.55, 'fill-outline-color': '#5e3273' }
-          },
-          {
-            id: 'parking-new',
-            type: 'fill',
-            source: 'parking',
-            filter: ['==', ['get', 'status'], 'new'],
-            paint: { 'fill-color': '#e67e22', 'fill-opacity': 0.55, 'fill-outline-color': '#92500f' }
-          },
-          {
-            id: 'trails-existing',
-            type: 'line',
-            source: 'trails',
-            filter: ['==', ['get', 'status'], 'existing'],
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#2ecc71', 'line-width': 3 }
-          },
-          {
-            id: 'trails-new',
-            type: 'line',
-            source: 'trails',
-            filter: ['==', ['get', 'status'], 'new'],
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#f39c12', 'line-width': 3, 'line-dasharray': [2, 1.5] }
-          },
-          {
-            id: 'trails-removed',
-            type: 'line',
-            source: 'trails',
-            filter: ['==', ['get', 'status'], 'removed'],
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#e74c3c', 'line-width': 2.5, 'line-dasharray': [1, 1] }
-          }
+          ...PARKING_LAYERS,
+          ...TRAIL_LAYERS,
         ],
-        terrain: { source: 'terrain', exaggeration: 1.4 },
+        terrain: { source: 'terrain', exaggeration: INIT_EXAG },
         sky: {}
       },
       ...TOURS.overview,
@@ -211,38 +199,35 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'imperial' }), 'bottom-left');
 
+    let popup;
+    function bindPopup(layerIds, fallbackName) {
+      map.on('click', layerIds, (e) => {
+        const f = e.features[0];
+        popup?.remove();
+        popup = new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<strong>${f.properties.name || fallbackName}</strong>` +
+            `<br><span style="opacity:0.7">${f.properties.status}</span>`
+          )
+          .addTo(map);
+      });
+    }
+
     map.on('load', () => {
-      map.on('click', ['trails-existing', 'trails-new', 'trails-removed'], (e) => {
-        const f = e.features[0];
-        const name = f.properties.name || 'Trail';
-        const status = f.properties.status;
-        new maplibregl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(`<strong>${name}</strong><br><span style="opacity:0.7">${status}</span>`)
-          .addTo(map);
-      });
-      map.on('click', ['parking-existing', 'parking-expanded', 'parking-new'], (e) => {
-        const f = e.features[0];
-        const name = f.properties.name || 'Parking';
-        const status = f.properties.status;
-        new maplibregl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(`<strong>${name}</strong><br><span style="opacity:0.7">${status}</span>`)
-          .addTo(map);
-      });
+      bindPopup(TRAIL_LAYERS.map(l => l.id), 'Trail');
+      bindPopup(PARKING_LAYERS.map(l => l.id), 'Parking');
     });
 
     document.querySelectorAll('#panel input[data-layer]').forEach(cb => {
       cb.addEventListener('change', () => {
-        const id = cb.dataset.layer;
-        map.setLayoutProperty(id, 'visibility', cb.checked ? 'visible' : 'none');
+        map.setLayoutProperty(cb.dataset.layer, 'visibility', cb.checked ? 'visible' : 'none');
       });
     });
 
     document.querySelectorAll('#panel button[data-tour]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const t = TOURS[btn.dataset.tour];
-        map.flyTo({ ...t, duration: 2500, essential: true });
+        map.flyTo({ ...TOURS[btn.dataset.tour], duration: 2500, essential: true });
       });
     });
 
