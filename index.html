@@ -490,6 +490,8 @@
       localStorage.setItem(OVERLAY_KEY, JSON.stringify({ corners: overlayCorners }));
     }
 
+    const CORNER_LABELS = ['TL', 'TR', 'BR', 'BL'];
+    const CORNER_COLORS = ['#e91e63', '#3498db', '#2ecc71', '#f39c12'];
     let cornerMarkers = [];
     function removeCornerMarkers() {
       cornerMarkers.forEach(m => m.remove());
@@ -498,7 +500,14 @@
     function addCornerMarkers() {
       removeCornerMarkers();
       cornerMarkers = overlayCorners.map((coord, i) => {
-        const m = new maplibregl.Marker({ draggable: true, color: '#e91e63' })
+        const el = document.createElement('div');
+        el.style.cssText =
+          `background:${CORNER_COLORS[i]};color:#111;font-weight:700;` +
+          `font-size:11px;padding:2px 5px;border-radius:4px;` +
+          `border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.5);` +
+          `cursor:grab;user-select:none;`;
+        el.textContent = CORNER_LABELS[i];
+        const m = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat(coord).addTo(map);
         m.on('drag', () => {
           const ll = m.getLngLat();
