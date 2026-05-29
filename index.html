@@ -103,8 +103,12 @@
     <strong>Terrain</strong>
     <div class="exag-row">
       <span>Exag:</span>
-      <input type="range" id="exag" min="1" max="3" step="0.1" value="1.4">
+      <input type="range" id="exag" min="0" max="3" step="0.1" value="1.4">
       <span id="exag-val">1.4×</span>
+    </div>
+    <div class="tour-buttons">
+      <button id="view-topdown">Top-down (2D)</button>
+      <button id="view-3d">3D</button>
     </div>
 
     <hr>
@@ -334,10 +338,21 @@
 
     const exag = document.getElementById('exag');
     const exagVal = document.getElementById('exag-val');
-    exag.addEventListener('input', () => {
-      const v = parseFloat(exag.value);
+    function applyExag(v) {
       exagVal.textContent = v.toFixed(1) + '×';
-      map.setTerrain({ source: 'terrain', exaggeration: v });
+      map.setTerrain(v === 0 ? null : { source: 'terrain', exaggeration: v });
+    }
+    exag.addEventListener('input', () => applyExag(parseFloat(exag.value)));
+
+    document.getElementById('view-topdown').addEventListener('click', () => {
+      exag.value = 0;
+      applyExag(0);
+      map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+    });
+    document.getElementById('view-3d').addEventListener('click', () => {
+      exag.value = INIT_EXAG;
+      applyExag(INIT_EXAG);
+      map.easeTo({ pitch: 60, bearing: -20, duration: 800 });
     });
 
     // -------- Drawing --------
