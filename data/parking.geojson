@@ -1,0 +1,48 @@
+{
+  "type": "FeatureCollection",
+  "_note": "PLACEHOLDER FEATURES. Replace with real digitized parking lots traced from satellite imagery and the proposed-plan PDF. Each feature must have properties.status of 'existing', 'expanded', or 'new' and a properties.name.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "PLACEHOLDER Rooney Rd TH (existing)", "status": "existing" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-105.17585, 39.70910],
+          [-105.17510, 39.70910],
+          [-105.17510, 39.70875],
+          [-105.17585, 39.70875],
+          [-105.17585, 39.70910]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "PLACEHOLDER Florida TH (expanded)", "status": "expanded" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-105.13990, 39.70120],
+          [-105.13900, 39.70120],
+          [-105.13900, 39.70080],
+          [-105.13990, 39.70080],
+          [-105.13990, 39.70120]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "PLACEHOLDER new trailhead lot", "status": "new" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-105.14830, 39.69420],
+          [-105.14760, 39.69420],
+          [-105.14760, 39.69390],
+          [-105.14830, 39.69390],
+          [-105.14830, 39.69420]
+        ]]
+      }
+    }
+  ]
+}
